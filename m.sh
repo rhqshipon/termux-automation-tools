@@ -48,6 +48,12 @@ help()	{
 		"  - o|opt|optimize to optimize apps using custom package name list. Initate to learn more.\n  |\n   optionally, only add 's' to perform operations silently.\n   optionally, only add 'e' to perform operations by a specified text file.\n   optionally, only add 'i' <space> <package name> to perform operations in interactive mode.\n\n"
 		"  - medsc|mediasc|mediascanner|mediascannerint to scan for all (if specifically not mentioned) media changes on the device.\n  |\n   optionally, only add int|intsd|internal|internalstorage|internal_storage|internalsd|internal_sd to specifically scan for media changes on the internal storage.\n   optionally, only add ext|extsd|external|externalstorage|external_storage|externalsd|external_sd to specifically scan for media changes on the external storage.\n\n"
 		"  - purge|organize|purgeall|organizeall to initiate all the functions related to purging and organizing which you have to do in a regular basis."
+		"  - cltmp|clean_temp|clean_tmp|cleantmp to clean up everything inside the 'temp' folder on the home directory of termux."
+		"  - sya|sync_alibi to sync, you know what."
+		"  - sync <next argument> to sync stuffs back and forth between local storage and the cloud.\n  |\n   add 'alibi' to, you know what."
+		"  - acs|aiub_courses_scraper to scrape through 'Offered Course Report.xlsx' file to analuze which course is filled up to which extent."
+		"  - cpp <path to .cpp file with the .cpp file> to run .cpp files."
+		"  - java <path to .java file with the .java file> to run .java files."
 		"  - dex|d to forcefully perform dexopt job."
 		"  - w|wifihack to search for WPS enabled Wi-Fi networks and perform pixie-dust attack to obtain the network authentication password."
 		"  - wph|wifipushhack to search for Wi-Fi networks which has WPS push button turned on to obtain the network authentication password."
@@ -132,6 +138,7 @@ does_it_look_like_a_directory()	{
 }
 
 compile_m()	{
+	cd
 	termux-fix-shebang ../usr/bin/m.sh
 	shc -f ../usr/bin/m.sh
 	if [[ -f ../usr/bin/m.sh.x ]]; then
@@ -281,6 +288,19 @@ fetch_mixplorer()	{
 	finished_message
 }
 
+sync_alibi() {
+	# Define variables
+	local backup_folder="$intsd/Files/Backup"
+	local topic="Docs/from_alibi"
+	local local_path="$backup_folder/$topic"
+	local remote_name="alibi"
+	local folder_path="[md.rhqshipon@gmail.com] Share GDrive 1/[01] Documents"
+
+	# Use backup_restore_directory function
+	backup_restore_directory "$local_path" "$remote_name" "$folder_path" "fetch"
+	finished_message
+}
+
 backup_file()	{
 	local local_file="$1"
 	local remote_name="$2"
@@ -298,9 +318,9 @@ backup_restore_directory()	{
 	local remote_path="$3"
 	local backup_or_restore="$4"
 	if [[ "$backup_or_restore" = "backup" ]] || [[ "$backup_or_restore" = "sync" ]]; then
-		rclone sync "$local_dir" "$remote_name:$remote_path"
+		rclone sync "$local_dir" "$remote_name:$remote_path" --progress
 	elif [[ "$backup_or_restore" = "restore" ]] || [[ "$backup_or_restore" = "fetch" ]]; then
-		rclone sync "$remote_name:$remote_path" "$local_dir"
+		rclone sync "$remote_name:$remote_path" "$local_dir" --progress
 	fi
 }
 
@@ -319,6 +339,8 @@ setup_termux_programs()	{
 	local install_rclone=n
 	local install_exiftool=n
 	local install_sh_compile_essentials=n
+	local install_clang=n
+	local install_java=n
 	local install_oneshot=n
 	if [[ "$1" == "s" ]]; then
 		install_python=y
@@ -326,6 +348,8 @@ setup_termux_programs()	{
 		install_rclone=y
 		install_exiftool=y
 		install_sh_compile_essentials=y
+		install_clang=y
+		install_java=y
 		install_oneshot=y
 	else
 		read -p "Do you want to install python (required for some programs)? (y/N) " install_python
@@ -333,6 +357,8 @@ setup_termux_programs()	{
 		read -p "Do you want to install rclone? (y/N) " install_rclone
 		read -p "Do you want to install exiftool? (y/N) " install_exiftool
 		read -p "Do you want to install sh compile essentials? (y/N) " install_sh_compile_essentials
+		read -p "Do you want to install clang? (y/N) " install_clang
+		read -p "Do you want to install java? (y/N) " install_java
 		read -p "Do you want to install oneshot? (y/N) " install_oneshot
 	fi
 	echo "Updating and upgrading packages..."
@@ -371,7 +397,21 @@ setup_termux_programs()	{
 	if [[ $install_sh_compile_essentials =~ ^[Yy]$ ]]; then
 		echo "Installing sh compile essentials..."
 		if ! (pkg install -y shc binutils); then
-			echo "Failed to install  sh compile essentials. Exiting."
+			echo "Failed to install sh compile essentials. Exiting."
+			exit 1
+		fi
+	fi
+	if [[ $install_clang =~ ^[Yy]$ ]]; then
+		echo "Installing clang compiler..."
+		if ! (pkg install -y clang); then
+			echo "Failed to install clang compiler. Exiting."
+			exit 1
+		fi
+	fi
+	if [[ $install_java =~ ^[Yy]$ ]]; then
+		echo "Installing java compiler..."
+		if ! (pkg install -y openjdk-17); then
+			echo "Failed to install java compiler. Exiting."
 			exit 1
 		fi
 	fi
@@ -444,6 +484,107 @@ setup_bash_history()	{
 	one_line
 	echo "	$filename has been successfully set up!"
 	two_line
+}
+
+# Helper function to copy a file to the home directory
+copy_to_home() {
+    local FULL_PATH="$1"
+    local DEST_DIR="$HOME/temp"
+
+    echo "Copying $(basename "$FULL_PATH") to $DEST_DIR..."
+    mkdir -p "$DEST_DIR"
+    cp "$FULL_PATH" "$DEST_DIR"
+    if [ $? -ne 0 ]; then
+        echo "Failed to copy file to $DEST_DIR!"
+        return 1
+    fi
+    echo "File copied successfully."
+    return 0
+}
+
+# Helper function to clean up files
+clean_up() {
+    local FILES=("$@")
+	three_line
+    echo "Cleaning up..."
+    for FILE in "${FILES[@]}"; do
+        rm -f "$FILE"
+    done
+}
+
+# Function to compile and run C++ programs
+run_my_cpp() {
+    if [ -z "$1" ]; then
+        echo "Usage: m cpp <filename.cpp>"
+        return 1
+    fi
+
+    local FULL_PATH="$1"
+    local FILE_NAME=$(basename "$FULL_PATH")
+    local BASE_NAME="${FILE_NAME%.cpp}"
+    local HOME_DIR="$HOME/temp"
+
+    copy_to_home "$FULL_PATH" || return 2
+
+    cd "$HOME_DIR"
+    echo "Compiling $FILE_NAME..."
+    clang++ "$FILE_NAME" -o "$BASE_NAME"
+    if [ $? -ne 0 ]; then
+        echo "Compilation failed!"
+        clean_up "$FILE_NAME"
+        return 3
+    fi
+
+    chmod +x "./$BASE_NAME"
+    clear
+    echo "Running the program..."
+    two_line
+    ./"$BASE_NAME"
+
+    clean_up "$FILE_NAME" "$BASE_NAME"
+}
+
+# Function to compile and run Java programs
+run_my_java() {
+    if [ -z "$1" ]; then
+        echo "Usage: m java <filename.java>"
+        return 1
+    fi
+
+    local FULL_PATH="$1"
+    local FILE_NAME=$(basename "$FULL_PATH")
+    local BASE_NAME="${FILE_NAME%.java}"
+    local HOME_DIR="$HOME/temp"
+
+    copy_to_home "$FULL_PATH" || return 2
+
+    cd "$HOME_DIR"
+    echo "Compiling $FILE_NAME..."
+    javac "$FILE_NAME"
+    if [ $? -ne 0 ]; then
+        echo "Compilation failed!"
+        clean_up "$FILE_NAME"
+        return 3
+    fi
+
+    clear
+    echo "Running the program..."
+    two_line
+    java "$BASE_NAME"
+
+    clean_up "$FILE_NAME" "${BASE_NAME}.class"
+}
+
+clean_temp()	{
+	cd
+	rm temp/*
+}
+
+aiub_courses_scraper()	{
+	local script_directory="/storage/emulated/0/Files/aiub_routine"
+	cd "$script_directory"
+	python script.py
+	cd
 }
 
 manipulate_shizuku_and_root()	{
@@ -552,8 +693,11 @@ optimize()	{
 		done
 		do_dexopt_job
 	else
-		local package="$1"
-		optimize_core "$package"
+		# Iterate through all arguments passed to the script
+		for package in "$@"; do
+			optimize_core "$package"
+			one_line
+		done
 	fi
 }
 
@@ -561,7 +705,9 @@ optimize_core()	{
 	local package="$1"
 	echo "  Package to be compiled in 'speed' profile: $package"
 	su -c "pm compile -m speed -f $package"
-	su -c "pm compile -f --compile-layouts $package"
+	if [[ "$(su -c 'getprop ro.build.version.release')" -ne 14 ]]; then
+  	  su -c "pm compile -f --compile-layouts $package"
+	fi
 }
 
 do_dexopt_job()	{
@@ -814,14 +960,13 @@ app_manager()	{
 				("")
 					local user_id="0"
 					two_line
-					$1 "$3" "$user_id"
+					$1 "$3" "$user_id" 
 					three_line
 					exit 1
 					;;
 				(*)
-					local user_id="$4"
 					two_line
-					$1 "$3" "$user_id"
+					$1 "$3" "${@:4}"
 					three_line
 					exit 1
 					;;
@@ -1292,7 +1437,7 @@ main()	{
 			app_manager "${@:1:4}"
 			;;
 		(o | opt | optimize)
-			app_manager optimize "${@:2:3}"
+			app_manager optimize "${@:2}"
 			;;
 		(suspend)
 			app_manager suspend_app "${@:2:2}"
@@ -1317,6 +1462,12 @@ main()	{
 			app_manager enable_app e "emergency.txt"
 			copy_files_emergency r
 			;;
+		(disable | disable_app)
+			app_manager disable_app "${@:2:2}"
+			;;
+		(enable | enable_app)
+			app_manager enable_app "${@:2:2}"
+			;;
 		(disablecmp | disable_component | disable_components)
 			app_manager disable_component "${@:2:2}"
 			;;
@@ -1331,15 +1482,36 @@ main()	{
 			backup_call_recordings
 			backup_restore_configurations backup termux_configurations
 			;;
+		(cpp)
+			run_my_cpp ${@:2}
+			;;
+		(java)
+			run_my_java ${@:2}
+			;;
+		(cltmp | clean_temp | clean_tmp | cleantmp)
+			clean_temp
+			;;
+		(sya | sync_alibi)
+			sync_alibi ${@:3}
+			;;
+		(sync)
+			case $2 in
+				(alibi)
+					sync_alibi ${@:3}
+					;;
+			esac
+			;;
+		(acs | aiub_courses_scraper)
+			aiub_courses_scraper ${@:2}
+			;;
 		(setup)
 			case $2 in
 				(settings)
 					setupSettings
 					;;
 				(phn | phone)
-					app_manager setupSettings
+					setupSettings
 					app_manager debloat s
-					app_manager optimize s
 					;;
 				(termprog | termuxprograms)
 					setup_termux_programs "$3"
