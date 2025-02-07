@@ -1,8 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-extsd="/storage/FA69-CD69"
-intsd="/storage/emulated/0"
-ControlLists="$extsd/Backup/Configurations/Extra/ControlLists"
-busybox_dir="/data/adb/ksu/bin/busybox"
+default_config="$HOME/../usr/etc/m_config.json"
+intsd=$(jq -r ".storage.intsd" "$default_config")
+extsd=$(jq -r ".storage.extsd" "$default_config")
+backup_dir=$(jq -r ".bulk_storage.backup_dir" "$default_config")
+ControlLists=$(jq -r ".bulk_storage.ControlLists" "$default_config")
+busybox_dir=$(jq -r ".bulk_storage.busybox_dir" "$default_config")
 
 
 help()	{
@@ -118,15 +120,14 @@ media_scan_intsd()	{
 	two_line
 	echo "  - Invoking the media scanner to scan for file changes in $intsd"
 	su -c "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$intsd'" > /dev/null
-	two_line
+	one_line
 }
 
 media_scan_extsd()	{
 	two_line
 	echo "  - Invoking the media scanner to scan for file changes in $extsd"
-	one_line
 	su -c "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$extsd'" > /dev/null
-	two_line
+	one_line
 }
 
 does_it_look_like_a_directory()	{
@@ -151,7 +152,7 @@ compile_m()	{
 
 backup_restore_termux_and_internal()	{
 	local bulk_dir="Backup/Data/Bulk"
-	local gcam_config_dir="$extsd/Backup/Apps/GCAM_RMX3461"
+	local gcam_config_dir="$backup_dir/Apps/GCAM_RMX3461"
 	case $1 in
 		(backup_termux)
 			tar -zcf "$extsd/$bulk_dir/termux-backup.tar.gz" -C /data/data/com.termux/files ./home ./usr
@@ -175,62 +176,87 @@ backup_restore_termux_and_internal()	{
 }
 
 backup_call_recordings()	{
-	local bcr="$intsd/Android/media/com.chiller3.bcr/files"
-	local aosp_callrec="$intsd/Recordings/Call recordings"
-	local src_dir
-	local method
-	local remote_name="evidence"
-	local remote_dir="Share GDrive 2 by md.rhqshipon.in@gmail.com/Call Recordings"
-	
-	if [[ -d "$bcr" ]]; then
-		method="bcr_dir"
-		src_dir="$bcr"
-	elif [[ -d "$aosp_callrec" ]]; then
-		method="aosp_callrec_dir"
-		src_dir="$aosp_callrec"
-	else
-		echo "	Directory '$bcr' and '$aosp_callrec' doesn't exist! Exiting!"
-		exit 1
-	fi
-	
-	for entry in "$src_dir"/*; do
-		local filename=$(basename "$entry")
-		
-		if [[ "$method" == "bcr_dir" ]]; then
-			local year="${filename:0:4}"
-			local month="${filename:4:2}"
-		elif [[ "$method" == "aosp_callrec_dir" ]]; then
-			local year="${filename:11:4}"
-			local month="${filename:15:2}"
-		else
-			echo "	Can't determine the method for backing up call recordings. Please investigate further!"
-			exit 1
-		fi
-		
-		local remote_subdir="$remote_dir/$year/$month"
-		one_line
-		echo "  File to back-up: $filename"
-		backup_file "$entry" "$remote_name" "$remote_subdir"
-	done
-	
-	one_line
-	echo "	Process finished!"
-	three_line
+    local bcr="$intsd/Android/media/com.chiller3.bcr/files"
+    local aosp_callrec="$intsd/Recordings/Call recordings"
+    local remote_name="evidence"
+    local remote_dir="Share GDrive 2 by md.rhqshipon.in@gmail.com/Call Recordings"
+    local processed_any=0
+
+    # Process BCR directory if it exists
+    if [[ -d "$bcr" ]]; then
+        processed_any=1
+        one_line
+        echo "  Processing BCR call recordings..."
+        process_directory "$bcr" "bcr_dir" "$remote_name" "$remote_dir"
+    fi
+
+    # Process AOSP directory if it exists
+    if [[ -d "$aosp_callrec" ]]; then
+        processed_any=1
+        one_line
+        echo "  Processing AOSP call recordings..."
+        process_directory "$aosp_callrec" "aosp_callrec_dir" "$remote_name" "$remote_dir"
+    fi
+
+    if [[ $processed_any -eq 0 ]]; then
+        one_line
+        echo "  Both directories '$bcr' and '$aosp_callrec' are missing! Exiting!"
+        exit 1
+    fi
+
+    one_line
+    echo "	Process finished!"
+    three_line
+}
+
+process_directory()	{
+    local src_dir="$1"
+    local method="$2"
+    local remote_name="$3"
+    local remote_dir="$4"
+    
+    for entry in "$src_dir"/*; do
+        # Skip processing if no files found
+        [[ -e "$entry" ]] || continue
+
+        local filename=$(basename "$entry")
+        local year month remote_subdir
+
+        case "$method" in
+            "bcr_dir")
+                year="${filename:0:4}"
+                month="${filename:4:2}"
+                ;;
+            "aosp_callrec_dir")
+                year="${filename:11:4}"
+                month="${filename:15:2}"
+                ;;
+            *)
+                echo "  Invalid processing method! Exiting!"
+                exit 1
+                ;;
+        esac
+
+        remote_subdir="$remote_dir/$year/$month"
+        one_line
+        echo "  File to back-up: $filename"
+        backup_file "$entry" "$remote_name" "$remote_subdir"
+    done
 }
 
 backup_restore_configurations()	{
-	local local_path="$extsd/Backup/Configurations"
+	local local_path="$backup_dir/Configurations"
 	local remote_name="backupDrive"
 	local folder_path="[Xiaomi Read] Share GDrive/Backup/Configurations"
 	local termux_config_dir="$local_path/Extra/Termux"
-	local gcam_config_dir="$extsd/Backup/Apps/GCAM_RMX3461"
+	local gcam_config_dir="$backup_dir/Apps/GCAM_RMX3461"
 	local backup_or_restore="$1"
 	case "$backup_or_restore" in
 		(backup)
 			case "$2" in
 				(termux_configurations)
 					cp -pr ".bash_history" "../usr/bin/m" "../usr/bin/m.sh" "OneShot/reports" ".config/rclone/rclone.conf" ".config/instaloader" "$termux_config_dir"
-					cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$extsd/Backup/Configurations/Extra/GCam/RMX3461"
+					cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$backup_dir/Configurations/Extra/GCam/RMX3461"
 					;;
 				(*)
 					echo "	Internal error! Exiting!"
@@ -279,7 +305,7 @@ backup_restore_app()	{
 }
 
 fetch_mixplorer()	{
-	local backup_folder="$extsd/Backup"
+	local backup_folder="$backup_dir"
 	local topic="Apps/Essentials/Ignore/MiXplorer/free"
 	local local_path="$backup_folder/$topic"
 	local remote_name="backupDrive"
@@ -290,7 +316,7 @@ fetch_mixplorer()	{
 
 sync_alibi() {
 	# Define variables
-	local backup_folder="$intsd/Files/Backup"
+	local backup_folder="$backup_dir"
 	local topic="Docs/from_alibi"
 	local local_path="$backup_folder/$topic"
 	local remote_name="alibi"
@@ -333,101 +359,67 @@ setup_termux_public()	{
 	three_line
 }
 
-setup_termux_programs()	{
-	local install_python=n
-	local install_instaloader=n
-	local install_rclone=n
-	local install_exiftool=n
-	local install_sh_compile_essentials=n
-	local install_clang=n
-	local install_java=n
-	local install_oneshot=n
-	if [[ "$1" == "s" ]]; then
-		install_python=y
-		install_instaloader=y
-		install_rclone=y
-		install_exiftool=y
-		install_sh_compile_essentials=y
-		install_clang=y
-		install_java=y
-		install_oneshot=y
-	else
-		read -p "Do you want to install python (required for some programs)? (y/N) " install_python
-		read -p "Do you want to install instaloader? (y/N) " install_instaloader
-		read -p "Do you want to install rclone? (y/N) " install_rclone
-		read -p "Do you want to install exiftool? (y/N) " install_exiftool
-		read -p "Do you want to install sh compile essentials? (y/N) " install_sh_compile_essentials
-		read -p "Do you want to install clang? (y/N) " install_clang
-		read -p "Do you want to install java? (y/N) " install_java
-		read -p "Do you want to install oneshot? (y/N) " install_oneshot
-	fi
-	echo "Updating and upgrading packages..."
-	if ! (pkg update -y && pkg upgrade -y); then
-		echo "Failed to update and upgrade packages."
-		exit 1
-	fi
-	if [[ $install_python =~ ^[Yy]$ ]]; then
-		echo "Installing Python..."
-		if ! (pkg install -y python); then
-			echo "Failed to install python. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_instaloader =~ ^[Yy]$ ]]; then
-		echo "Installing instaloader..."
-		if ! (pip install git+https://github.com/instaloader/instaloader.git); then
-			echo "Failed to install instaloader. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_rclone =~ ^[Yy]$ ]]; then
-		echo "Installing rclone..."
-		if ! (pkg install -y rclone); then
-			echo "Failed to install rclone. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_exiftool =~ ^[Yy]$ ]]; then
-		echo "Installing exiftool..."
-		if ! (pkg install -y exiftool); then
-			echo "Failed to install exiftool. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_sh_compile_essentials =~ ^[Yy]$ ]]; then
-		echo "Installing sh compile essentials..."
-		if ! (pkg install -y shc binutils); then
-			echo "Failed to install sh compile essentials. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_clang =~ ^[Yy]$ ]]; then
-		echo "Installing clang compiler..."
-		if ! (pkg install -y clang); then
-			echo "Failed to install clang compiler. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_java =~ ^[Yy]$ ]]; then
-		echo "Installing java compiler..."
-		if ! (pkg install -y openjdk-17); then
-			echo "Failed to install java compiler. Exiting."
-			exit 1
-		fi
-	fi
-	if [[ $install_oneshot =~ ^[Yy]$ ]]; then
-		echo "Setting up oneshot..."
-		setup_oneshot "out"
-	fi
-	if [[ "$1" == "s" ]]; then
-		two_line
-		echo "	All programs successfully installed."
-		two_line
-	else
-		two_line
-		echo "	Successfully installed programs you requested."
-		three_line
-	fi
+setup_termux_programs() {
+    local install_git=n install_python=n install_instaloader=n install_rclone=n install_exiftool=n install_sh_compile_essentials=n install_clang=n install_java=n install_oneshot=n
+
+    if [[ "$1" == "s" ]]; then
+        install_git=y install_python=y install_instaloader=y install_rclone=y install_exiftool=y install_sh_compile_essentials=y install_clang=y install_java=y install_oneshot=y
+    else
+        read -rp "Install git (required)? (y/N) " install_git
+        read -rp "Install python (required)? (y/N) " install_python
+        read -rp "Install instaloader? (y/N) " install_instaloader
+        read -rp "Install rclone? (y/N) " install_rclone
+        read -rp "Install exiftool? (y/N) " install_exiftool
+        read -rp "Install sh compile essentials? (y/N) " install_sh_compile_essentials
+        read -rp "Install clang? (y/N) " install_clang
+        read -rp "Install java? (y/N) " install_java
+        read -rp "Install oneshot? (y/N) " install_oneshot
+    fi
+
+    echo "Updating and upgrading packages..."
+    if ! (pkg update -y && pkg upgrade -y); then
+        echo "Failed to update and upgrade packages."
+        return 1
+    fi
+
+    declare -A packages=(
+        [git]="pkg install -y git"
+        [python]="pkg install -y python"
+        [instaloader]="pip install git+https://github.com/instaloader/instaloader.git"
+        [rclone]="pkg install -y rclone"
+        [exiftool]="pkg install -y exiftool"
+        [sh_compile_essentials]="pkg install -y shc binutils jq"
+        [clang]="pkg install -y clang"
+        [java]="pkg install -y openjdk-17"
+    )
+
+    for pkg_name in "${!packages[@]}"; do
+        install_var="install_${pkg_name}"
+        if [[ ${!install_var} =~ ^[Yy]$ ]]; then
+            echo "Installing ${pkg_name}..."
+            if ! eval "${packages[$pkg_name]}"; then
+                echo "Failed to install ${pkg_name}. Exiting."
+                return 1
+            fi
+        fi
+    done
+
+    if [[ $install_oneshot =~ ^[Yy]$ ]]; then
+        echo "Setting up oneshot..."
+        setup_oneshot "out"
+    fi
+
+    local message="Successfully installed programs you requested."
+    if [[ "$1" == "s" ]]; then
+        message="All programs successfully installed."
+    fi
+
+    two_line
+    echo "    $message" # Four spaces here
+    two_line
+    if [[ "$1" != "s" ]]; then
+        three_line
+    fi
 }
 
 setup_oneshot()	{
@@ -450,7 +442,7 @@ setup_oneshot()	{
         echo "	Successfuly cloned '$repo_name' into folder '$destination_folder'."
     else
         echo "	Failed to clone '$repo_name'. Checking local repository..."
-        local external_path="$extsd/Backup/Data/Bulk/OneShot"
+        local external_path="$backup_dir/Data/Bulk/OneShot"
         local internal_path="$intsd/OneShot"
         if [ -d "$external_path" ]; then
             echo "  Found local copy of '$repo_name'."
@@ -1324,7 +1316,7 @@ oneshot_hacker()	{
 		one_line
 		local OneShot_reports_directory="OneShot/reports"
 		if [[ -d $OneShot_reports_directory ]]; then
-			local OneShot_reports_backup_directory="$extsd/Backup/Configurations/Extra/Termux/reports"
+			local OneShot_reports_backup_directory="$backup_dir/Configurations/Extra/Termux/reports"
 			mkdir -p "$OneShot_reports_backup_directory"  # Create directory if it doesn't exist
 			cp -pr "$OneShot_reports_directory/stored.txt" "$OneShot_reports_directory/stored.csv" "$OneShot_reports_backup_directory" \
 				&& echo "	Backup complete!" || echo "	Backup failed!"

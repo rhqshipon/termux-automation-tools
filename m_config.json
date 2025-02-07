@@ -1,0 +1,12 @@
+{
+ 	"storage":	{
+		"intsd": "/storage/emulated/0",
+		"extsd": "/storage/emulated/0"
+	},
+
+	"bulk_storage":	{
+		"backup_dir": "$intsd/Files/Backup",
+		"ControlLists": "$backup_dir/Configurations/Extra/ControlLists",
+		"busybox_dir": "/data/adb/ksu/bin/busybox"
+	}
+}
