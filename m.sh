@@ -333,6 +333,7 @@ fetch_mixplorer()	{
 push_m_sh() {
 	local dir="$backup_dir/Data/Bulk"
 	local actual_dir="$dir/termux-automation-tools"
+	two_line
 
 	# Clone if the directory doesn't exist
 	if [[ ! -d "$actual_dir" ]]; then
