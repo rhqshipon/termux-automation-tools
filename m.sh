@@ -1,8 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
-default_config="$HOME/../usr/etc/m_config.json"
+default_config="/data/data/com.termux/files/usr/etc/m_config.json"
 intsd=$(jq -r ".storage.intsd" "$default_config")
 extsd=$(jq -r ".storage.extsd" "$default_config")
 backup_dir=$(jq -r ".bulk_storage.backup_dir" "$default_config")
+device_model=$(jq -r ".additional_info.device_model" "$default_config")
 ControlLists=$(jq -r ".bulk_storage.ControlLists" "$default_config")
 busybox_dir=$(jq -r ".bulk_storage.busybox_dir" "$default_config")
 
@@ -34,7 +35,9 @@ help()	{
 		"  - backup conf|config|configuration|configurations to backup configuration files to google drive."
 		"  - backup callrec|callrecording|callrecordings to backup call recordings to google drive."
 		"  - backup all|everything to backup call recordings, configurations to google drive."
-		"  - backup|restore app <app package name> to respectively backup/restore the specified backed up app to/from google drive."
+		"  - backup wp|wpass|wifipass|wifipassword|wifipasswords to backup obtained Wi-Fi passwords using OneShot to GitHub repository."
+		"  - backup|restore app <app package name> to respectively backup/restore the specified backed up app to/from Google Drive."
+		"  - backup|restore pass|password to accordingly backup/restore the KeePass database to/from Google Drive."
 		"  - p|pa|pan|panic|panik to initiate panic mode."
 		"  - up|upa|unpan|unpanic|unpanik to initiate unpanic mode."
 		"  - debloat to debloat apps using custom package list. Initiate to learn more."
@@ -48,7 +51,7 @@ help()	{
 		"  - disablecmp|disable_component|disable_components to disable specific components of package(s) using custom package/component name list. Initate to learn more."
 		"  - enablecmp|enable_component|enable_components to enable specific components of package(s) using custom package/component name list. Initate to learn more."
 		"  - o|opt|optimize to optimize apps using custom package name list. Initate to learn more.\n  |\n   optionally, only add 's' to perform operations silently.\n   optionally, only add 'e' to perform operations by a specified text file.\n   optionally, only add 'i' <space> <package name> to perform operations in interactive mode.\n\n"
-		"  - medsc|mediasc|mediascanner|mediascannerint to scan for all (if specifically not mentioned) media changes on the device.\n  |\n   optionally, only add int|intsd|internal|internalstorage|internal_storage|internalsd|internal_sd to specifically scan for media changes on the internal storage.\n   optionally, only add ext|extsd|external|externalstorage|external_storage|externalsd|external_sd to specifically scan for media changes on the external storage.\n\n"
+		"  - msc|medsc|mediasc|mediascanner|mediascannerint to scan for all (if specifically not mentioned) media changes on the device.\n  |\n   optionally, only add int|intsd|internal|internalstorage|internal_storage|internalsd|internal_sd to specifically scan for media changes on the internal storage.\n   optionally, only add ext|extsd|external|externalstorage|external_storage|externalsd|external_sd to specifically scan for media changes on the external storage.\n\n"
 		"  - purge|organize|purgeall|organizeall to initiate all the functions related to purging and organizing which you have to do in a regular basis."
 		"  - cltmp|clean_temp|clean_tmp|cleantmp to clean up everything inside the 'temp' folder on the home directory of termux."
 		"  - sya|sync_alibi to sync, you know what."
@@ -151,20 +154,20 @@ compile_m()	{
 }
 
 backup_restore_termux_and_internal()	{
-	local bulk_dir="Backup/Data/Bulk"
+	local bulk_dir="$backup_dir/Data/Bulk"
 	local gcam_config_dir="$backup_dir/Apps/GCAM_RMX3461"
 	case $1 in
 		(backup_termux)
-			tar -zcf "$extsd/$bulk_dir/termux-backup.tar.gz" -C /data/data/com.termux/files ./home ./usr
+			tar -zcf "$bulk_dir/termux-backup.tar.gz" -C /data/data/com.termux/files ./home ./usr
 			;;
 		(restore_termux)
-			tar -zxf "$extsd/$bulk_dir/termux-backup.tar.gz" -C /data/data/com.termux/files --recursive-unlink --preserve-permissions
+			tar -zxf "$backup_dir/termux-backup.tar.gz" -C /data/data/com.termux/files --recursive-unlink --preserve-permissions
 			;;
 		(backup_InternalStorage)
-			tar -zcf "$extsd/$bulk_dir/InternalStorageBackup.tar.gz" -C $extsd/$bulk_dir/InternalStorage .
+			tar -zcf "$backup_dir/InternalStorageBackup.tar.gz" -C $extsd/$bulk_dir/InternalStorage .
 			;;
 		(restore_InternalStorage)
-			tar -zxf "$extsd/$bulk_dir/InternalStorageBackup.tar.gz" -C $intsd --recursive-unlink --preserve-permissions
+			tar -zxf "$backup_dir/InternalStorageBackup.tar.gz" -C $intsd --recursive-unlink --preserve-permissions
 			cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$intsd"
 			media_scan_intsd
 			;;
@@ -223,15 +226,15 @@ process_directory()	{
         local year month remote_subdir
 
         case "$method" in
-            "bcr_dir")
+            ("bcr_dir")
                 year="${filename:0:4}"
                 month="${filename:4:2}"
                 ;;
-            "aosp_callrec_dir")
+            ("aosp_callrec_dir")
                 year="${filename:11:4}"
                 month="${filename:15:2}"
                 ;;
-            *)
+            (*)
                 echo "  Invalid processing method! Exiting!"
                 exit 1
                 ;;
@@ -256,7 +259,7 @@ backup_restore_configurations()	{
 			case "$2" in
 				(termux_configurations)
 					cp -pr ".bash_history" "../usr/bin/m" "../usr/bin/m.sh" "OneShot/reports" ".config/rclone/rclone.conf" ".config/instaloader" "$termux_config_dir"
-					cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$backup_dir/Configurations/Extra/GCam/RMX3461"
+					cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$backup_dir/Configurations/Extra/GCam/$device_model"
 					;;
 				(*)
 					echo "	Internal error! Exiting!"
@@ -283,9 +286,19 @@ backup_restore_configurations()	{
 						backup_restore_directory "$termux_config_dir" "$remote_name" "$folder_path" "$backup_or_restore"
 						rm -r "Termux"
 					fi
-					cp -p "$termux_config_dir/rclone.conf" ".config/rclone"
-					cp -p "$termux_config_dir/instaloader" ".config"
-					cp -pr "$termux_config_dir/reports" "OneShot"
+					mkdir -p "$HOME/.config/instaloader"
+					cp -p "$termux_config_dir/rclone.conf" "$HOME/.config/rclone"
+					chmod +x ".config/rclone/rclone.conf"
+					cp -p "$termux_config_dir"/session-* "$HOME/.config/instaloader/"
+
+					# Clone WifiPassRepo
+					if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+						echo "✅ Authentication successful! Cloning repository..."
+						git clone git@github.com:rhqshipon/WiFiPassRepo.git "OneShot/reports"
+					else
+						echo "❌ Authentication failed! Continuing with local copy."
+						cp -pr "$termux_config_dir/reports" "OneShot"
+					fi
 					rm -r "Termux" > /dev/null 2>&1
 					;;
 			esac
@@ -327,6 +340,16 @@ sync_alibi() {
 	finished_message
 }
 
+backup_restore_password_database()	{
+	local password_database_directory="$backup_dir/Configurations/Pass"
+	local local_path="$password_database_directory"
+	local remote_name="main"
+	local folder_path="Credentials"
+	one_line
+	backup_restore_directory "$local_path" "$remote_name" "$folder_path" "$1"
+	finished_message
+}
+
 backup_file()	{
 	local local_file="$1"
 	local remote_name="$2"
@@ -360,10 +383,10 @@ setup_termux_public()	{
 }
 
 setup_termux_programs() {
-    local install_git=n install_python=n install_instaloader=n install_rclone=n install_exiftool=n install_sh_compile_essentials=n install_clang=n install_java=n install_oneshot=n
+    local install_git=n install_python=n install_instaloader=n install_rclone=n install_exiftool=n install_sh_compile_essentials=n install_clang=n install_java=n install_oneshot=n install_personal_essentials=n
 
     if [[ "$1" == "s" ]]; then
-        install_git=y install_python=y install_instaloader=y install_rclone=y install_exiftool=y install_sh_compile_essentials=y install_clang=y install_java=y install_oneshot=y
+        install_git=y install_python=y install_instaloader=y install_rclone=y install_exiftool=y install_sh_compile_essentials=y install_clang=y install_java=y install_oneshot=y install_personal_essentials=y
     else
         read -rp "Install git (required)? (y/N) " install_git
         read -rp "Install python (required)? (y/N) " install_python
@@ -374,6 +397,7 @@ setup_termux_programs() {
         read -rp "Install clang? (y/N) " install_clang
         read -rp "Install java? (y/N) " install_java
         read -rp "Install oneshot? (y/N) " install_oneshot
+		read -rp "Install personal essentials? (y/N) " install_personal_essentials
     fi
 
     echo "Updating and upgrading packages..."
@@ -383,14 +407,15 @@ setup_termux_programs() {
     fi
 
     declare -A packages=(
+		[sh_compile_essentials]="pkg install -y shc binutils jq"
         [git]="pkg install -y git"
         [python]="pkg install -y python"
         [instaloader]="pip install git+https://github.com/instaloader/instaloader.git"
         [rclone]="pkg install -y rclone"
         [exiftool]="pkg install -y exiftool"
-        [sh_compile_essentials]="pkg install -y shc binutils jq"
         [clang]="pkg install -y clang"
         [java]="pkg install -y openjdk-17"
+		[personal_essentials]="pkg install -y tur-repo && pkg install -y python-pip python-numpy python-pandas python-xlib python-lxml && pip install tabulate"
     )
 
     for pkg_name in "${!packages[@]}"; do
@@ -409,6 +434,10 @@ setup_termux_programs() {
         setup_oneshot "out"
     fi
 
+	if [[ "$1" == "s" ]]; then
+		setup_git
+	fi
+
     local message="Successfully installed programs you requested."
     if [[ "$1" == "s" ]]; then
         message="All programs successfully installed."
@@ -420,6 +449,18 @@ setup_termux_programs() {
     if [[ "$1" != "s" ]]; then
         three_line
     fi
+}
+
+setup_git()	{
+	echo "	Setting up git for personal use..."
+	git config --global user.name "rhqshipon"
+	git config --global user.email "rhqshipon@gmail.com"
+	cp -r "$backup_dir/Data/Bulk/my_github"/* ".ssh"
+	cd ".ssh"
+	chmod +x "id_ed25519" "id_ed25519.pub" "known_hosts" "known_hosts.old"
+	cd
+	git config --global url."git@github.com:".insteadOf "https://github.com/"
+	finished_message
 }
 
 setup_oneshot()	{
@@ -570,6 +611,16 @@ run_my_java() {
 clean_temp()	{
 	cd
 	rm temp/*
+}
+
+backup_wifi_pass_to_github()	{
+	one_line
+	cd OneShot/reports
+	git add .
+	git commit -m "addition of new entries"
+	git push "$@"
+	cd
+	finished_message
 }
 
 aiub_courses_scraper()	{
@@ -1568,6 +1619,12 @@ main()	{
 					backup_call_recordings
 					backup_restore_configurations "$1" "termux_configurations"
 					;;
+				(pass | password)
+					backup_restore_password_database "$1"
+					;;
+				(wp | wpass | wifipass | wifipassword | wifipasswords)
+					backup_wifi_pass_to_github "${@:3}"
+					;;
 				(termconf | termconfig | termuxconf | termuxconfig | termuxconfiguration | termuxconfigurations | termux_configuration | termux_configurations)
 					backup_restore_configurations "$1" "termux_configurations"
 					;;
@@ -1624,7 +1681,7 @@ main()	{
 					;;
 			esac
 			;;
-		(medsc | mediasc | mediascanner | mediascannerint)
+		(msc | medsc | mediasc | mediascanner | mediascannerint)
 			case $2 in
 				(int | intsd | internal | internalstorage | internal_storage | internalsd | internal_sd)
 					media_scan_intsd

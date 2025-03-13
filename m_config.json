@@ -5,8 +5,12 @@
 	},
 
 	"bulk_storage":	{
-		"backup_dir": "$intsd/Files/Backup",
-		"ControlLists": "$backup_dir/Configurations/Extra/ControlLists",
+		"backup_dir": "/storage/emulated/0/Files/Backup",
+		"ControlLists": "/storage/emulated/0/Files/Backup/Configurations/Extra/ControlLists",
 		"busybox_dir": "/data/adb/ksu/bin/busybox"
+	},
+	
+	"additional_info":	{
+		"device_model": "peridot"
 	}
 }
