@@ -259,6 +259,8 @@ backup_restore_configurations()	{
 			case "$2" in
 				(termux_configurations)
 					cp -pr ".bash_history" "../usr/bin/m" "../usr/bin/m.sh" "OneShot/reports" ".config/rclone/rclone.conf" ".config/instaloader" "$termux_config_dir"
+					rm -rf "$termux_config_dir/reports/.git"
+					mkdir -p "$backup_dir/Configurations/Extra/GCam/$device_model"
 					cp -pr "$gcam_config_dir/LMC8.4" "$gcam_config_dir/SGCAM" "$backup_dir/Configurations/Extra/GCam/$device_model"
 					;;
 				(*)
