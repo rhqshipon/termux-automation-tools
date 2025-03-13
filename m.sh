@@ -376,6 +376,7 @@ push_m_sh() {
 
 	# Return to home directory
 	cd || exit 1
+	finished_message
 }
 
 sync_alibi() {
