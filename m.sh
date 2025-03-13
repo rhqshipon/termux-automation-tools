@@ -54,6 +54,7 @@ help()	{
 		"  - msc|medsc|mediasc|mediascanner|mediascannerint to scan for all (if specifically not mentioned) media changes on the device.\n  |\n   optionally, only add int|intsd|internal|internalstorage|internal_storage|internalsd|internal_sd to specifically scan for media changes on the internal storage.\n   optionally, only add ext|extsd|external|externalstorage|external_storage|externalsd|external_sd to specifically scan for media changes on the external storage.\n\n"
 		"  - purge|organize|purgeall|organizeall to initiate all the functions related to purging and organizing which you have to do in a regular basis."
 		"  - cltmp|clean_temp|clean_tmp|cleantmp to clean up everything inside the 'temp' folder on the home directory of termux."
+		"  - pmsh|push_m_sh to push 'm.sh' and 'm_config.json' to github."
 		"  - sya|sync_alibi to sync, you know what."
 		"  - sync <next argument> to sync stuffs back and forth between local storage and the cloud.\n  |\n   add 'alibi' to, you know what."
 		"  - acs|aiub_courses_scraper to scrape through 'Offered Course Report.xlsx' file to analuze which course is filled up to which extent."
@@ -329,6 +330,54 @@ fetch_mixplorer()	{
 	finished_message
 }
 
+push_m_sh() {
+	local dir="$backup_dir/Data/Bulk"
+	local actual_dir="$dir/termux-automation-tools"
+
+	# Clone if the directory doesn't exist
+	if [[ ! -d "$actual_dir" ]]; then
+		git clone git@github.com:rhqshipon/termux-automation-tools.git "$actual_dir"
+	fi
+
+	# Ensure the directory exists after cloning
+	if [[ ! -d "$actual_dir" ]]; then
+		echo "	Error: Cannot source the git working directory. Exiting!"
+		exit 1
+	fi
+
+	# Add the directory as a safe directory globally (for Termux permissions)
+	git config --global --add safe.directory "$actual_dir"
+
+	# Change to the project directory
+	cd "$actual_dir" || exit 1
+
+	# Pull latest changes
+	git pull origin main
+
+	# Define source file paths
+	local source_msh="$PREFIX/bin/m.sh"
+	local source_config="$PREFIX/etc/m_config.json"
+
+	# Copy files only if at least one exists
+	if [[ -f "$source_msh" || -f "$source_config" ]]; then
+		cp -pr "$source_msh" "$source_config" "$actual_dir" 2>/dev/null
+	else
+		echo "Warning: No source files found. Skipping copy."
+	fi
+
+	# Check if there are changes before committing
+	if ! git diff --quiet || ! git diff --cached --quiet; then
+		git add .
+		git commit -m "update"
+		git push
+	else
+		echo "No changes to commit."
+	fi
+
+	# Return to home directory
+	cd || exit 1
+}
+
 sync_alibi() {
 	# Define variables
 	local backup_folder="$backup_dir"
@@ -453,16 +502,26 @@ setup_termux_programs() {
     fi
 }
 
-setup_git()	{
+setup_git() {
 	echo "	Setting up git for personal use..."
-	git config --global user.name "rhqshipon"
-	git config --global user.email "rhqshipon@gmail.com"
-	cp -r "$backup_dir/Data/Bulk/my_github"/* ".ssh"
-	cd ".ssh"
-	chmod +x "id_ed25519" "id_ed25519.pub" "known_hosts" "known_hosts.old"
-	cd
+
+	# Prompt for Git username and email
+	read -p "Enter your Git username: " git_username
+	read -p "Enter your Git email: " git_email
+
+	# Set Git user details based on input
+	git config --global user.name "$git_username"
+	git config --global user.email "$git_email"
+
+	# Copy SSH keys to the correct directory
+	mkdir -p "$HOME/.ssh"
+	cp -r "$backup_dir/Data/Bulk/my_github/"* "$HOME/.ssh/"
+
+	# Use SSH instead of HTTPS for GitHub
 	git config --global url."git@github.com:".insteadOf "https://github.com/"
-	finished_message
+
+	# Check if finished_message function exists before calling
+	declare -F finished_message >/dev/null && finished_message
 }
 
 setup_oneshot()	{
@@ -1526,6 +1585,9 @@ main()	{
 			copy_whatsapp_media
 			backup_call_recordings
 			backup_restore_configurations backup termux_configurations
+			;;
+		(pmsh | push_m_sh)
+			push_m_sh
 			;;
 		(cpp)
 			run_my_cpp ${@:2}
