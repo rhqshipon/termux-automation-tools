@@ -54,6 +54,7 @@ help()	{
 		"  - msc|medsc|mediasc|mediascanner|mediascannerint to scan for all (if specifically not mentioned) media changes on the device.\n  |\n   optionally, only add int|intsd|internal|internalstorage|internal_storage|internalsd|internal_sd to specifically scan for media changes on the internal storage.\n   optionally, only add ext|extsd|external|externalstorage|external_storage|externalsd|external_sd to specifically scan for media changes on the external storage.\n\n"
 		"  - purge|organize|purgeall|organizeall to initiate all the functions related to purging and organizing which you have to do in a regular basis."
 		"  - cltmp|clean_temp|clean_tmp|cleantmp to clean up everything inside the 'temp' folder on the home directory of termux."
+		"  - dev 1 or 0 to turn on or off the developer options"
 		"  - pmsh|push_m_sh to push 'm.sh' and 'm_config.json' to github."
 		"  - sya|sync_alibi to sync, you know what."
 		"  - sync <next argument> to sync stuffs back and forth between local storage and the cloud.\n  |\n   add 'alibi' to, you know what."
@@ -1226,6 +1227,10 @@ setupSettings() {
 	done
 }
 
+control_dev_options() {
+	su -c "settings put global development_settings_enabled $1"
+}
+
 set_animation_duration_scale() {
 	# Define the setting keys
 	keys=(
@@ -1602,6 +1607,9 @@ main()	{
 			;;
 		(sya | sync_alibi)
 			sync_alibi ${@:3}
+			;;
+		(dev)
+			control_dev_options "$2"
 			;;
 		(sync)
 			case $2 in
