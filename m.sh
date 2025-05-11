@@ -469,7 +469,7 @@ setup_termux_programs() {
         [exiftool]="pkg install -y exiftool"
         [clang]="pkg install -y clang"
         [java]="pkg install -y openjdk-17"
-		[personal_essentials]="pkg install -y tur-repo && pkg install -y python-pip python-numpy python-pandas python-xlib python-lxml && pip install tabulate"
+		[personal_essentials]="pkg install -y tur-repo && pkg install -y python-pip python-numpy python-pandas python-xlib python-lxml && pip install tabulate openpyxl"
     )
 
     for pkg_name in "${!packages[@]}"; do
