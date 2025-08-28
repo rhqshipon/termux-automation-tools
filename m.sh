@@ -331,6 +331,40 @@ fetch_mixplorer()	{
 	finished_message
 }
 
+copy_party() {
+    local dest="/data/user/0/com.termux/files/usr/bin/copyparty-en.py"
+    local url="https://github.com/9001/copyparty/releases/latest/download/copyparty-en.py"
+
+    if [[ $2 == "update" ]]; then
+        echo "⬇️  Downloading Copyparty..."
+        curl -L "$url" -o "$dest"
+
+        if [[ -f "$dest" ]]; then
+            chmod +x "$dest"
+            echo "✅ Saved to $dest"
+        else
+            echo "❌ Download failed!"
+            return 1
+        fi
+    else
+        if [[ ! -f "$dest" ]]; then
+            echo "❌ Copyparty not installed yet. Run: m cppy update"
+            return 1
+        fi
+
+        chmod +x "$dest"
+
+        # Default host dir (internal storage)
+        local host_dir="$HOME/storage/shared"
+        cd "$host_dir" || exit
+
+        # Run copyparty using the full path
+        "$dest"
+
+        cd || exit
+    fi
+}
+
 push_m_sh() {
 	local dir="$backup_dir/Data/Bulk"
 	local actual_dir="$dir/termux-automation-tools"
@@ -381,6 +415,97 @@ push_m_sh() {
 	finished_message
 }
 
+convert_flac_to_ogg() {
+    input_dir="$intsd/Music/to_convert"
+    output_dir="$input_dir/converted"
+
+    mkdir -p "$output_dir"
+
+    shopt -s nullglob
+    for flac_file in "$input_dir"/*.flac; do
+        [ -e "$flac_file" ] || continue
+
+        filename=$(basename "$flac_file" .flac)
+        output_file="$output_dir/$filename.ogg"
+        cover_tmp="$output_dir/${filename}.cover"
+
+        echo "━ Converting: $filename"
+
+        # 1️⃣ Get input bitrate and sample rate using ffprobe
+        input_bitrate=$(ffprobe -v error -select_streams a:0 \
+            -show_entries stream=bit_rate \
+            -of default=nk=1:nw=1 "$flac_file")
+
+        sample_rate=$(ffprobe -v error -select_streams a:0 \
+            -show_entries stream=sample_rate \
+            -of default=nk=1:nw=1 "$flac_file")
+
+        # 🔁 If bitrate is missing, compute it from file size and duration
+        if [[ ! "$input_bitrate" =~ ^[0-9]+$ ]]; then
+            filesize=$(stat -c %s "$flac_file") # bytes
+            duration=$(ffprobe -v error -show_entries format=duration \
+                -of default=nk=1:nw=1 "$flac_file")
+            if [[ "$duration" =~ ^[0-9.]+$ && "$filesize" =~ ^[0-9]+$ && "$duration" != 0 ]]; then
+                input_bitrate=$(awk -v size="$filesize" -v time="$duration" \
+                    'BEGIN {printf "%.0f", (size * 8) / time}')
+            else
+                input_bitrate=0
+            fi
+        fi
+
+        input_bitrate=$((input_bitrate / 1000))  # bps → kbps
+
+        # 2️⃣ Decide quality scale based on source bitrate
+        if [[ $input_bitrate -lt 300 ]]; then
+            qscale=6
+        elif [[ $input_bitrate -lt 400 ]]; then
+            qscale=7
+        elif [[ $input_bitrate -lt 550 ]]; then
+            qscale=9
+        else
+            qscale=10
+        fi
+
+        # 3️⃣ Convert to OGG using auto quality + original sample rate
+        ffmpeg -hide_banner -loglevel error \
+            -i "$flac_file" \
+            -map 0:a \
+            -map_metadata 0 \
+            -c:a libvorbis \
+            -qscale:a "$qscale" \
+            -ar "$sample_rate" \
+            "$output_file"
+
+        if [[ $? -ne 0 ]]; then
+            echo "  ✘ Conversion failed"
+            continue
+        fi
+
+        # 4️⃣ Extract cover art as .jpg or .png
+        metaflac --export-picture-to="$cover_tmp" "$flac_file"
+        if [[ -s "$cover_tmp" ]]; then
+            mime_type=$(file --mime-type -b "$cover_tmp")
+            if [[ "$mime_type" == "image/jpeg" ]]; then
+                mv "$cover_tmp" "$output_dir/$filename.jpg"
+                echo "  🖼️  Cover art saved as: $filename.jpg"
+            elif [[ "$mime_type" == "image/png" ]]; then
+                mv "$cover_tmp" "$output_dir/$filename.png"
+                echo "  🖼️  Cover art saved as: $filename.png"
+            else
+                echo "  ⚠️  Unknown cover art format ($mime_type), leaving as raw file"
+            fi
+        else
+            rm -f "$cover_tmp"
+            echo "  ⚠️  No embedded cover art found"
+        fi
+
+        echo "  ✅ Finished: $filename.ogg"
+    done
+    shopt -u nullglob
+	media_scan_intsd
+	media_scan_extsd
+}
+
 sync_alibi() {
 	# Define variables
 	local backup_folder="$backup_dir"
@@ -392,6 +517,39 @@ sync_alibi() {
 	# Use backup_restore_directory function
 	backup_restore_directory "$local_path" "$remote_name" "$folder_path" "fetch"
 	finished_message
+}
+
+sync_aiub_academic() {
+ # Check if argument is provided
+ if [[ $# -eq 0 ]]; then
+  echo "Error: No argument provided."
+  echo "Usage: sync_aiub_academic [backup|restore]"
+  echo "  backup  - Push files from local to remote"
+  echo "  restore - Pull files from remote to local"
+  return 1
+ fi
+ 
+ local operation="$1"
+ 
+ # Validate argument
+ if [[ "$operation" != "backup" && "$operation" != "restore" ]]; then
+  echo "Error: Invalid argument '$operation'."
+  echo "Usage: sync_aiub_academic [backup|restore]"
+  echo "  backup  - Push files from local to remote"
+  echo "  restore - Pull files from remote to local"
+  return 1
+ fi
+ 
+ # Define variables
+ local backup_folder="$intsd/Files"
+ local topic="aiub/Documents/Academic"
+ local local_path="$backup_folder/$topic"
+ local remote_name="sniping_aiub_univ"
+ local folder_path="Data/Study/Academic"
+ 
+ # Use backup_restore_directory function
+ backup_restore_directory "$local_path" "$remote_name" "$folder_path" "$operation"
+ finished_message
 }
 
 backup_restore_password_database()	{
@@ -1608,6 +1766,9 @@ main()	{
 		(sya | sync_alibi)
 			sync_alibi ${@:3}
 			;;
+		(saiubd| saiuba | sync_aiub_academic)
+			sync_aiub_academic ${@:2}
+			;;
 		(dev)
 			control_dev_options "$2"
 			;;
@@ -1680,6 +1841,9 @@ main()	{
 			if [[ "$2" == "mix" ]] || [[ "$2" == "mixplorer" ]]; then
 				fetch_mixplorer
 			fi
+			;;
+		(cfo | convert_flac_to_ogg)
+			convert_flac_to_ogg
 			;;
 		(backup | restore)
 			case $2 in
@@ -1774,6 +1938,9 @@ main()	{
 					exit 1
 					;;
 			esac
+			;;
+		(cppy | cpparty | copy_party)
+			copy_party "$@"
 			;;
 		(bat | battery)
 			batteryHealth
