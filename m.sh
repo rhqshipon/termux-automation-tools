@@ -1767,7 +1767,7 @@ main()	{
 		(sya | sync_alibi)
 			sync_alibi ${@:3}
 			;;
-		(saiubd| saiuba | sync_aiub_academic)
+		(saiubd | saiuba | sync_aiub_academic)
 			sync_aiub_academic ${@:2}
 			;;
 		(dev)
