@@ -57,6 +57,7 @@ help()	{
 		"  - dev 1 or 0 to turn on or off the developer options"
 		"  - pmsh|push_m_sh to push 'm.sh' and 'm_config.json' to github."
 		"  - sya|sync_alibi to sync, you know what."
+		"  - saiubd|saiuba|sync_aiub_academic and 'backup' 'restore' to relatively backup and restore the academics folder"
 		"  - sync <next argument> to sync stuffs back and forth between local storage and the cloud.\n  |\n   add 'alibi' to, you know what."
 		"  - acs|aiub_courses_scraper to scrape through 'Offered Course Report.xlsx' file to analuze which course is filled up to which extent."
 		"  - cpp <path to .cpp file with the .cpp file> to run .cpp files."
